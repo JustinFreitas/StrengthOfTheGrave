@@ -231,7 +231,8 @@ function trim(s)
 function hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, rRoll)
     local aTraits
 	if sTargetNodeType == "pc" then
-        aTraits = DB.getChildren(nodeTarget, "traitlist")
+        -- This was traitlist when spawned from Undead Fortitude but Shadow Magic is a Sorcerer subclass from Xanathar's that shows in the feature list.
+        aTraits = DB.getChildren(nodeTarget, "featurelist")
     elseif sTargetNodeType == "ct" then
         aTraits = DB.getChildren(nodeTarget, "traits")
 	else
