@@ -1,23 +1,16 @@
-# Undead Fortitude
+# Strength of the Grave
 
-https://github.com/JustinFreitas/UndeadFortitude
+https://github.com/JustinFreitas/StrengthOfTheGrave
 
-Undead Fortitude v2.0.5, by Justin Freitas
+Strength of the Grave v1.0.0, by Justin Freitas
 
 ReadMe and Usage Notes
 
-When damage is applied to an NPC or PC with the Undead Fortitude trait, the target will roll a constitution save with a DC of 5 + the damage taken.  If success, the target will be left with one hit point instead of dying.  If the damage type is at least part radiant or the hit is a critical hit, Undead Fortitude has no effect and will not be triggered (target will go unconscious, as normal).  This saves lots of time and frustration in zombie encounters for my ToA game because I'm not having to repeatedly fix HP and remove the unconscious effect in these big hoard fights we are running.
+When damage is applied to an NPC or PC with the Strength of the Grave trait, the target will roll a charisma save with a DC of 5 + the damage taken.  If success, the target will be left with one hit point instead of dying.  If the damage type is at least part radiant or the hit is a critical hit, Strength of the Grave has no effect and will not be triggered (target will go unconscious, as normal).  This saves lots of time and frustration in zombie encounters for my ToA game because I'm not having to repeatedly fix HP and remove the unconscious effect in these big hoard fights we are running.
 
-There is a radial menu option in the 11 o'clock position when right clicking on a CT actor that allows for Undead Fortitude to be applied to an Unconscious actor.  If invoked, it will leave the actor with one wound remaining until max hp and also remove the Unconscious and Prone effects if they exist.  This will work even if the target doesn't have the Undead Fortitude trait.
+There is a radial menu option in the 11 o'clock position when right clicking on a CT actor that allows for Strength of the Grave to be applied to an Unconscious actor.  If invoked, it will leave the actor with one wound remaining until max hp and also remove the Unconscious and Prone effects if they exist.  This will work even if the target doesn't have the Strength of the Grave trait.
 
-A chat command /uf (or /undeadfortitude) was added to do the application to apply the Undead Fortitude result to the specified Combat Tracker actor (case sensitive).  The first match found will be used.  This will work even if the target doesn't have the Undead Fortitude trait.  For example: /uf Zombie
+A chat command /sg (or /sotg or /strengthofthegrave) was added to do the application to apply the Strength of the Grave result to the specified Combat Tracker actor (case sensitive).  The first match found will be used.  This will work even if the target doesn't have the Strength of the Grave trait.  For example: /sg PCName
 
 Changelist:
-- v1.0 - Initial version.
-- v1.1 - Add radial menu button and chat command to apply Undead Fortitude to an Unconscious Combat Tracker actor.
-- v2.0 - Change the way the mechanism works by removing the queue and using the roll to pass data directly.  Add the ability to customize the behavior based off of the PC/NPC trait name.  For example, Undead Fortitude (MOD 10) will use 10 instead of 5 when processing Undead Fortitude DC calculations.  Something like Death Fortitude (DC 11) will trigger the behavior with a static DC of 11 and no radiant damage restriction because the word Undead isn't before Fortitude.  Another example is Undead Fortitude (Mod 8, no mods) which will trigger the behavior with a DC modifier of 8 instead of 5 and not have the radiant damage or critical hit restrictions.  Use the name of the fortitude trait specified on the creature in the saving throw text and the matching of that saving throw text.  That way, customized fortitude trait names will show instead of hardcoded Undead Fortitude.  The modifier values now support negative values (i.e. MOD -5).  Multiple UF targets were not being accounted for correctly... fixed.
-- v2.0.1 - Thanks to kreppulun for reporting an issue with the damage handling on FGU.  Got that fixed and it now uses the correct damage during Undead Fortitude processing.  Other minor fixes and improvements.
-- v2.0.2 - Some bug fixes around radial menu application of Undead Fortitude and simplifications.
-- v2.0.3 - Icon update, 42px.
-- v2.0.4 - Clear Modifier value prior to issuing Undead Fortitude save.
-- v2.0.5 - Since source and target are the same in this case, use source in the case that the target is nil.  Fixes suppressed rolling in Request Rolls extension.
+- v1.0.0 - Initial version, from Undead Fortitude v2.0.5 as base.

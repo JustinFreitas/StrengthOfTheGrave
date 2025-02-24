@@ -1,11 +1,11 @@
-local BUTTON_POSITION_INDEX = 8
+local BUTTON_POSITION_INDEX = 7
 
 function onInit()
 	if super and super.onInit then
 		super.onInit();
 	end
 
-    registerMenuItem("Apply Fortitude to Unconscious Actor", "white_undeadfortitude_icon", BUTTON_POSITION_INDEX)
+    registerMenuItem("Apply StrengthOfTheGrave to Unconscious Actor", "white_strengthofthegrave_icon", BUTTON_POSITION_INDEX)
 end
 
 function onMenuSelection(selection, subselection)
@@ -13,7 +13,7 @@ function onMenuSelection(selection, subselection)
     if not nodeCT then return end
 
     if selection == BUTTON_POSITION_INDEX then
-        applyUndeadFortitude(nodeCT)
+        applyStrengthOfTheGrave(nodeCT)
         return
     end
 
@@ -22,6 +22,6 @@ function onMenuSelection(selection, subselection)
     end
 end
 
-function applyUndeadFortitude(nodeCT)
-    UndeadFortitude.applyUndeadFortitude(nodeCT)
+function applyStrengthOfTheGrave(nodeCT)
+    StrengthOfTheGrave.applyStrengthOfTheGrave(nodeCT)
 end

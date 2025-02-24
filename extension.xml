@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="iso-8859-1"?>
 <root version="3.3" release="8.1|CoreRPG:4.1">
-	<announcement text="Undead Fortitude v2.0.5 FGC/FGU 5E, 4/15/24\r2023-2024 Justin Freitas" font="emotefont" icon="undeadfortitude_icon" />
+	<announcement text="Strength of the Grave v1.0.0 FGC/FGU 5E\r2025 Justin Freitas, 2/23/25" font="emotefont" icon="strengthofthegrave_icon" />
 	<properties>
-		<name>Feature: Undead Fortitude</name>
-		<version>2.0.5</version>
+		<name>Feature: Strength of the Grave</name>
+		<version>1.0.0</version>
 		<loadorder>9999</loadorder>
 		<author>Justin Freitas</author>
-		<description>Automates the Undead Fortitude constitution saving throw.</description>
+		<description>Automates the Strength of the Grave charisma saving throw.</description>
 		<ruleset>
 			<name>5E</name>
 		</ruleset>
 	</properties>
 
 	<base>
-		<script name="UndeadFortitude" file="scripts/undeadfortitude.lua" />
-		<icon name="undeadfortitude_icon" file="graphics/icons/undeadfortitude_icon.png" />
-		<icon name="white_undeadfortitude_icon" file="graphics/icons/white_undeadfortitude_icon.png" />
+		<script name="StrengthOfTheGrave" file="scripts/strengthofthegrave.lua" />
+		<icon name="strengthofthegrave_icon" file="graphics/icons/strengthofthegrave_icon.png" />
+		<icon name="white_strengthofthegrave_icon" file="graphics/icons/white_strengthofthegrave_icon.png" />
         <includefile source="campaign/ct_host.xml" />
 	</base>
 </root>

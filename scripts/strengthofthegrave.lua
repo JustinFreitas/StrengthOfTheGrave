@@ -2,7 +2,7 @@
 USER_ISHOST = false
 
 local ActionDamage_applyDamage
-local DEFAULT_UNDEAD_FORTITUDE_DC_MOD = 5
+local DEFAULT_STRENGTH_OF_THE_GRAVE_DC_MOD = 5
 local HP_TEMPORARY = "hp.temporary"
 local HP_TOTAL = "hp.total"
 local HP_WOUNDS = "hp.wounds"
@@ -17,8 +17,9 @@ function onInit()
     USER_ISHOST = User.isHost()
 
 	if USER_ISHOST then
-		Comm.registerSlashHandler("uf", processChatCommand)
-		Comm.registerSlashHandler("undeadfortitude", processChatCommand)
+		Comm.registerSlashHandler("sg", processChatCommand)
+		Comm.registerSlashHandler("sotg", processChatCommand)
+		Comm.registerSlashHandler("strengthofthegrave", processChatCommand)
         ActionsManager.registerResultHandler("save", onSaveNew)
         ActionDamage_applyDamage = ActionDamage.applyDamage
         if isClientFGU() then
@@ -42,21 +43,21 @@ end
 function processChatCommand(_, sParams)
     local nodeCT = getCTNodeForDisplayName(sParams)
     if nodeCT == nil then
-        displayChatMessage(sParams .. " was not found in the Combat Tracker, skipping Fortitude application.")
+        displayChatMessage(sParams .. " was not found in the Combat Tracker, skipping StrengthOfTheGrave application.")
         return
     end
 
-    applyUndeadFortitude(nodeCT)
+    applyStrengthOfTheGrave(nodeCT)
 end
 
 function displayChatMessage(sFormattedText)
 	if not sFormattedText then return end
 
-	local msg = {font = MSGFONT, icon = "undeadfortitude_icon", secret = false, text = sFormattedText}
+	local msg = {font = MSGFONT, icon = "strengthofthegrave_icon", secret = false, text = sFormattedText}
     Comm.addChatMessage(msg) -- local, not broadcast
 end
 
-function applyUndeadFortitude(nodeCT)
+function applyStrengthOfTheGrave(nodeCT)
     local sTargetNodeType, nodeTarget = ActorManager.getTypeAndNode(nodeCT)
 	if not nodeTarget then
 		return
@@ -73,7 +74,7 @@ function applyUndeadFortitude(nodeCT)
 
     local sDisplayName = ActorManager.getDisplayName(nodeTarget)
     if not EffectManager5E.hasEffect(nodeTarget, UNCONSCIOUS_EFFECT_LABEL) then
-        displayChatMessage(sDisplayName .. " is not an unconscious actor, skipping Fortitude application.")
+        displayChatMessage(sDisplayName .. " is not an unconscious actor, skipping StrengthOfTheGrave application.")
         return
     end
 
@@ -82,7 +83,7 @@ function applyUndeadFortitude(nodeCT)
     DB.setValue(nodeTarget, sWounds, "number", nWounds)
     EffectManager.removeEffect(nodeCT, UNCONSCIOUS_EFFECT_LABEL)
     EffectManager.removeEffect(nodeCT, "Prone")
-    displayChatMessage("Fortitude was applied to " .. sDisplayName .. ".")
+    displayChatMessage("StrengthOfTheGrave was applied to " .. sDisplayName .. ".")
 end
 
 function isClientFGU()
@@ -90,7 +91,7 @@ function isClientFGU()
 end
 
 function onSaveNew(rSource, rTarget, rRoll)
-    if rRoll.bUndeadFortitude == nil then
+    if rRoll.bStrengthOfTheGrave == nil then
         ActionSave.onSave(rSource, rTarget, rRoll)
         return
     end
@@ -101,7 +102,7 @@ function onSaveNew(rSource, rTarget, rRoll)
 
     local nModDC
     if rRoll.sModDC == nil or rRoll.sModDC == NIL then
-        nModDC = DEFAULT_UNDEAD_FORTITUDE_DC_MOD
+        nModDC = DEFAULT_STRENGTH_OF_THE_GRAVE_DC_MOD
     else
         nModDC = tonumber(rRoll.sModDC)
     end
@@ -116,9 +117,9 @@ function onSaveNew(rSource, rTarget, rRoll)
 
     local msgShort = {font = MSGFONT}
 	local msgLong = {font = MSGFONT}
-    local nConSave = ActionsManager.total(rRoll)
-	msgShort.text = rRoll.sTrimmedFortitudeTraitNameForSave
-	msgLong.text = rRoll.sTrimmedFortitudeTraitNameForSave .. " [" .. nConSave ..  "]"
+    local nChaSave = ActionsManager.total(rRoll)
+	msgShort.text = rRoll.sTrimmedTraitNameForSave
+	msgLong.text = rRoll.sTrimmedTraitNameForSave .. " [" .. nChaSave ..  "]"
     msgLong.text = msgLong.text .. "[vs. DC " .. nDC .. "]"
 	msgShort.text = msgShort.text .. " ->"
 	msgLong.text = msgLong.text .. " ->"
@@ -126,7 +127,7 @@ function onSaveNew(rSource, rTarget, rRoll)
     msgLong.text = msgLong.text .. " [for " .. ActorManager.getDisplayName(rSource) .. "]"
 	msgShort.icon = "roll_cast"
 
-	if nConSave >= nDC then
+	if nChaSave >= nDC then
 		msgLong.text = msgLong.text .. " [SUCCESS]"
 	else
 		msgLong.text = msgLong.text .. " [FAILURE]"
@@ -134,10 +135,10 @@ function onSaveNew(rSource, rTarget, rRoll)
 
     ActionsManager.outputResult(rRoll.bSecret, rSource, nil, msgLong, msgShort)
 
-    -- Undead Fortitude processing
+    -- Strength of the Grave processing
     local nAllHP = rRoll.nTotalHP + rRoll.nTempHP
-    if nConSave >= nDC then
-        -- Undead Fortitude save was made!
+    if nChaSave >= nDC then
+        -- Strength of the Grave save was made!
         nDamage = nAllHP - rRoll.nWounds - 1
         local sDamage = string.gsub(rRoll.sDamage, "=%-?%d+", "=" .. nDamage)
         if isClientFGU() then
@@ -149,7 +150,7 @@ function onSaveNew(rSource, rTarget, rRoll)
             ActionDamage_applyDamage(rSource, rTarget or rSource, rRoll.bSecret, sDamage, nDamage)
         end
     else
-        -- Undead Fortitude save was NOT made
+        -- Strength of the Grave save was NOT made
         if tonumber(rRoll.nWounds) < tonumber(rRoll.nTotalHP) then
             if isClientFGU() then
                 local rDamageRoll = deserializeTable(rRoll.rDamageRoll)
@@ -227,7 +228,7 @@ function trim(s)
     return (s:gsub("^%s*(.-)%s*$", "%1"))
  end
 
-function hasFortitudeTrait(sTargetNodeType, nodeTarget, rRoll)
+function hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, rRoll)
     local aTraits
 	if sTargetNodeType == "pc" then
         aTraits = DB.getChildren(nodeTarget, "traitlist")
@@ -239,8 +240,8 @@ function hasFortitudeTrait(sTargetNodeType, nodeTarget, rRoll)
 
     for _, aTrait in pairs(aTraits) do
         local aDecomposedTraitName = getDecomposedTraitName(aTrait)
-        if aDecomposedTraitName.nFortitudeStart ~= nil then
-            return getFortitudeData(aDecomposedTraitName, aTraits, sTargetNodeType, nodeTarget, rRoll)
+        if aDecomposedTraitName.nStrengthOfTheGraveStart ~= nil then
+            return getStrengthOfTheGraveData(aDecomposedTraitName, aTraits, sTargetNodeType, nodeTarget, rRoll)
         end
     end
 end
@@ -305,13 +306,8 @@ function getTargetHealthData(sTargetNodeType, nodeTarget, rRoll)
     end
 end
 
-function getFortitudeData(aDecomposedTraitName, aTraits, sTargetNodeType, nodeTarget, rRoll)
-    local bUndead = false
-    if trim(aDecomposedTraitName.sFortitudeTraitPrefix):lower():match("undead") then
-        bUndead = true
-    end
-
-    local sTrimmedSuffixLower = trim(aDecomposedTraitName.sFortitudeTraitSuffix):lower()
+function getStrengthOfTheGraveData(aDecomposedTraitName, aTraits, sTargetNodeType, nodeTarget, rRoll)
+    local sTrimmedSuffixLower = trim(aDecomposedTraitName.sStrengthOfTheGraveTraitSuffix):lower()
     local nStaticDC = tonumber(sTrimmedSuffixLower:match("dc%s*(-?%d+)"))
     local nModDC = tonumber(sTrimmedSuffixLower:match("mod%s*(-?%d+)"))
     local bNoMods = trim(sTrimmedSuffixLower):find("no%s*mods")
@@ -321,49 +317,48 @@ function getFortitudeData(aDecomposedTraitName, aTraits, sTargetNodeType, nodeTa
         nTempHP = aTargetHealthData.nTempHP,
         nWounds = aTargetHealthData.nWounds,
         aTraits = aTraits,
-        bUndead = bUndead,
         nStaticDC = nStaticDC,
         nModDC = nModDC,
         bNoMods = bNoMods,
-        sTrimmedFortitudeTraitNameForSave = aDecomposedTraitName.sTrimmedFortitudeTraitNameForSave
+        sTrimmedTraitNameForSave = aDecomposedTraitName.sTrimmedTraitNameForSave
     }
 end
 
 function getDecomposedTraitName(aTrait)
     local sTraitName = DB.getText(aTrait, "name")
     local sTraitNameLower = sTraitName:lower()
-    local nFortitudeStart, nFortitudeEnd = sTraitNameLower:find("fortitude")
-    local sFortitudeTraitPrefix, sFortitudeTraitSuffix, sTrimmedFortitudeTraitNameForSave
-    if nFortitudeStart ~= nil and nFortitudeEnd ~= nil then
-        sFortitudeTraitPrefix = sTraitName:sub(1, nFortitudeStart - 1)
-        sFortitudeTraitSuffix = sTraitName:sub(nFortitudeEnd + 1)
-        sTrimmedFortitudeTraitNameForSave = trim(sTraitName:sub(1, nFortitudeEnd))
+    local nStrengthOfTheGraveStart, nStrengthOfTheGraveEnd = sTraitNameLower:find("strength of the grave")
+    local sStrengthOfTheGraveTraitPrefix, sStrengthOfTheGraveTraitSuffix, sTrimmedTraitNameForSave
+    if nStrengthOfTheGraveStart ~= nil and nStrengthOfTheGraveEnd ~= nil then
+        sStrengthOfTheGraveTraitPrefix = sTraitName:sub(1, nStrengthOfTheGraveStart - 1)
+        sStrengthOfTheGraveTraitSuffix = sTraitName:sub(nStrengthOfTheGraveEnd + 1)
+        sTrimmedTraitNameForSave = trim(sTraitName:sub(1, nStrengthOfTheGraveEnd))
     end
 
     return {
         sTraitName = sTraitName,
         sTraitNameLower = sTraitNameLower,
-        nFortitudeStart = nFortitudeStart,
-        nFortitudeEnd = nFortitudeEnd,
-        sFortitudeTraitPrefix = sFortitudeTraitPrefix,
-        sFortitudeTraitSuffix = sFortitudeTraitSuffix,
-        sTrimmedFortitudeTraitNameForSave = sTrimmedFortitudeTraitNameForSave
+        nStrengthOfTheGraveStart = nStrengthOfTheGraveStart,
+        nStrengthOfTheGraveEnd = nStrengthOfTheGraveEnd,
+        sStrengthOfTheGraveTraitPrefix = sStrengthOfTheGraveTraitPrefix,
+        sStrengthOfTheGraveTraitSuffix = sStrengthOfTheGraveTraitSuffix,
+        sTrimmedTraitNameForSave = sTrimmedTraitNameForSave
     }
 end
 
-function processFortitude(aFortitudeData, nTotal, sDamage, rTarget, bSecret, rDamageRoll)
-    local nAllHP = aFortitudeData.nTotalHP + aFortitudeData.nTempHP
-    if aFortitudeData.nWounds + nTotal >= nAllHP
-       and (aFortitudeData.bNoMods or not aFortitudeData.bUndead or not string.find(sDamage, "%[TYPE:.*radiant.*%]"))
-       and (aFortitudeData.bNoMods or not string.find(sDamage, "%[CRITICAL%]"))
+function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret, rDamageRoll)
+    local nAllHP = aData.nTotalHP + aData.nTempHP
+    if aData.nWounds + nTotal >= nAllHP
+       and (aData.bNoMods or not string.find(sDamage, "%[TYPE:.*radiant.*%]"))
+       and (aData.bNoMods or not string.find(sDamage, "%[CRITICAL%]"))
        and not EffectManager5E.hasEffect(rTarget, UNCONSCIOUS_EFFECT_LABEL)
-       and aFortitudeData.nTotalHP > aFortitudeData.nWounds then
+       and aData.nTotalHP > aData.nWounds then
         local rRoll = { }
         rRoll.sType = "save"
         rRoll.aDice = { "d20" }
-        local nMod, bADV, bDIS, sAddText = ActorManager5E.getSave(rTarget, "constitution")
+        local nMod, bADV, bDIS, sAddText = ActorManager5E.getSave(rTarget, "charisma")
         rRoll.nMod = nMod
-        rRoll.sDesc = "[SAVE] Constitution for " .. aFortitudeData.sTrimmedFortitudeTraitNameForSave
+        rRoll.sDesc = "[SAVE] Charisma for " .. aData.sTrimmedTraitNameForSave
         if sAddText and sAddText ~= "" then
             rRoll.sDesc = rRoll.sDesc .. " " .. sAddText
         end
@@ -377,15 +372,15 @@ function processFortitude(aFortitudeData, nTotal, sDamage, rTarget, bSecret, rDa
         end
 
         rRoll.bSecret = bSecret
-        rRoll.bUndeadFortitude = true
+        rRoll.bStrengthOfTheGrave = true
         rRoll.nDamage = nTotal
         rRoll.sDamage = sDamage
-        rRoll.nTotalHP = aFortitudeData.nTotalHP
-        rRoll.nTempHP = aFortitudeData.nTempHP
-        rRoll.nWounds = aFortitudeData.nWounds
-        rRoll.sModDC = tostring(aFortitudeData.nModDC) -- override number, can be nil
-        rRoll.sStaticDC = tostring(aFortitudeData.nStaticDC) -- override number, can be nil
-        rRoll.sTrimmedFortitudeTraitNameForSave = aFortitudeData.sTrimmedFortitudeTraitNameForSave
+        rRoll.nTotalHP = aData.nTotalHP
+        rRoll.nTempHP = aData.nTempHP
+        rRoll.nWounds = aData.nWounds
+        rRoll.sModDC = tostring(aData.nModDC) -- override number, can be nil
+        rRoll.sStaticDC = tostring(aData.nStaticDC) -- override number, can be nil
+        rRoll.sTrimmedTraitNameForSave = aData.sTrimmedTraitNameForSave
         if rDamageRoll ~= nil then
             rRoll.rDamageRoll = serializeTable(rDamageRoll)
         end
@@ -400,13 +395,13 @@ function applyDamage_FGC(rSource, rTarget, bSecret, sDamage, nTotal)
 	local sTargetNodeType, nodeTarget = ActorManager.getTypeAndNode(rTarget)
 	if not nodeTarget then return end
 
-    local aFortitudeData = hasFortitudeTrait(sTargetNodeType, nodeTarget, nil)
-    local bFortitudeTriggered
-    if aFortitudeData then
-        bFortitudeTriggered = processFortitude(aFortitudeData, nTotal, sDamage, rTarget, bSecret, nil)
+    local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, nil)
+    local bStrengthOfTheGraveTriggered
+    if aData then
+        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret, nil)
     end
 
-    if not bFortitudeTriggered then
+    if not bStrengthOfTheGraveTriggered then
         ActionDamage_applyDamage(rSource, rTarget, bSecret, sDamage, nTotal)
     end
 end
@@ -415,13 +410,13 @@ function applyDamage_FGU(rSource, rTarget, rRoll)
 	local sTargetNodeType, nodeTarget = ActorManager.getTypeAndNode(rTarget)
 	if not nodeTarget then return end
 
-    local aFortitudeData = hasFortitudeTrait(sTargetNodeType, nodeTarget, rRoll)
-    local bFortitudeTriggered
-    if aFortitudeData then
-        bFortitudeTriggered = processFortitude(aFortitudeData, rRoll.nTotal, rRoll.sDesc, rTarget, false, rRoll)
+    local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, rRoll)
+    local bStrengthOfTheGraveTriggered
+    if aData then
+        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, rRoll.nTotal, rRoll.sDesc, rTarget, false, rRoll)
     end
 
-    if not bFortitudeTriggered then
+    if not bStrengthOfTheGraveTriggered then
         ActionDamage_applyDamage(rSource, rTarget, rRoll)
     end
 end
