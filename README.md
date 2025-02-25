@@ -2,7 +2,7 @@
 
 https://github.com/JustinFreitas/StrengthOfTheGrave
 
-Strength of the Grave v1.0.0, by Justin Freitas
+Strength of the Grave v1.0.1, by Justin Freitas
 
 ReadMe and Usage Notes
 
@@ -14,3 +14,4 @@ A chat command /sg (or /sotg or /strengthofthegrave) was added to do the applica
 
 Changelist:
 - v1.0.0 - Initial version, from Undead Fortitude v2.0.5 as base.
+- v1.0.1 - Update icons.  Update gitignore for old UF outputs.
