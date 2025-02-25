@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="iso-8859-1"?>
 <root version="3.3" release="8.1|CoreRPG:4.1">
-	<announcement text="Strength of the Grave v1.0.0 FGC/FGU 5E\r2025 Justin Freitas, 2/23/25" font="emotefont" icon="strengthofthegrave_icon" />
+	<announcement text="Strength of the Grave v1.0.1 FGC/FGU 5E\r2025 Justin Freitas, 2/25/25" font="emotefont" icon="strengthofthegrave_icon" />
 	<properties>
 		<name>Feature: Strength of the Grave</name>
-		<version>1.0.0</version>
+		<version>1.0.1</version>
 		<loadorder>9999</loadorder>
 		<author>Justin Freitas</author>
 		<description>Automates the Strength of the Grave charisma saving throw.</description>
