@@ -2,6 +2,7 @@
 USER_ISHOST = false
 
 local ActionDamage_applyDamage
+local ActionSave_onSave
 local DEFAULT_STRENGTH_OF_THE_GRAVE_DC_MOD = 5
 local HP_TEMPORARY = "hp.temporary"
 local HP_TOTAL = "hp.total"
@@ -9,6 +10,7 @@ local HP_WOUNDS = "hp.wounds"
 local HPTEMP = "hptemp"
 local HPTOTAL = "hptotal"
 local MSGFONT = "msgfont"
+local NAME = "name"
 local NIL = "nil"
 local UNCONSCIOUS_EFFECT_LABEL = "Unconscious"
 local WOUNDS = "wounds"
@@ -20,12 +22,18 @@ function onInit()
 		Comm.registerSlashHandler("sg", processChatCommand)
 		Comm.registerSlashHandler("sotg", processChatCommand)
 		Comm.registerSlashHandler("strengthofthegrave", processChatCommand)
-        ActionsManager.registerResultHandler("save", onSaveNew)
-        ActionDamage_applyDamage = ActionDamage.applyDamage
-        if isClientFGU() then
-            ActionDamage.applyDamage = applyDamage_FGU
-        else
-            ActionDamage.applyDamage = applyDamage_FGC
+        ActionSave_onSave = ActionSave.onSave
+        ActionSave.onSave = onSaveNew
+        if ActionHealthD20 and ActionHealthD20.apply then
+            ActionDamage_applyDamage = ActionHealthD20.apply
+            ActionHealthD20.apply = applyDamage_v2
+        elseif ActionDamage and ActionDamage.applyDamage then
+            ActionDamage_applyDamage = ActionDamage.applyDamage
+            if isClientFGU() then
+                ActionDamage.applyDamage = applyDamage_FGU
+            else
+                ActionDamage.applyDamage = applyDamage_FGC
+            end
         end
     end
 end
@@ -92,11 +100,17 @@ end
 
 function onSaveNew(rSource, rTarget, rRoll)
     if rRoll.bStrengthOfTheGrave == nil then
-        ActionSave.onSave(rSource, rTarget, rRoll)
+        if ActionSave_onSave then
+            ActionSave_onSave(rSource, rTarget, rRoll)
+        end
         return
     end
 
-    ActionsManager2.decodeAdvantage(rRoll)
+    if ActionD20 and ActionD20.decodeAdvantage then
+        ActionD20.decodeAdvantage(rRoll)
+    elseif ActionsManager2 and ActionsManager2.decodeAdvantage then
+        ActionsManager2.decodeAdvantage(rRoll)
+    end
 	local rMessage = ActionsManager.createActionMessage(rSource, rRoll)
 	Comm.deliverChatMessage(rMessage)
 
@@ -137,96 +151,101 @@ function onSaveNew(rSource, rTarget, rRoll)
 
     -- Strength of the Grave processing
     local nAllHP = rRoll.nTotalHP + rRoll.nTempHP
+    local bSecret = (rRoll.bSecret == "1" or rRoll.bSecret == true)
+
     if nChaSave >= nDC then
         -- Strength of the Grave save was made!
+        local vPower = getOrCreateStrengthOfTheGravePower(rSource)
+        local nPrepared, nCast = getPreparedAndCastFromStrengthOfTheGravePower(vPower)
+        if nCast < nPrepared then
+            setCastValueOnPower(vPower, nCast + 1)
+        end
         nDamage = nAllHP - rRoll.nWounds - 1
         local sDamage = string.gsub(rRoll.sDamage, "=%-?%d+", "=" .. nDamage)
-        if isClientFGU() then
-            local rDamageRoll = deserializeTable(rRoll.rDamageRoll)
-            rDamageRoll.nTotal = tonumber(nDamage)
-            rDamageRoll.sDesc = sDamage
+
+        local rDamageRoll = {
+            sType = "damage",
+            sDesc = sDamage,
+            nTotal = tonumber(nDamage),
+            aDice = {},
+            bSecret = bSecret
+        }
+
+        if ActionHealthD20 and ActionHealthD20.apply then
+            ActionDamage_applyDamage(rSource, rTarget or rSource, rDamageRoll)
+        elseif isClientFGU() then
             ActionDamage_applyDamage(rSource, rTarget or rSource, rDamageRoll)
         else
-            ActionDamage_applyDamage(rSource, rTarget or rSource, rRoll.bSecret, sDamage, nDamage)
+            ActionDamage_applyDamage(rSource, rTarget or rSource, bSecret, sDamage, nDamage)
         end
     else
         -- Strength of the Grave save was NOT made
         if tonumber(rRoll.nWounds) < tonumber(rRoll.nTotalHP) then
-            if isClientFGU() then
-                local rDamageRoll = deserializeTable(rRoll.rDamageRoll)
+            local rDamageRoll = {
+                sType = "damage",
+                sDesc = rRoll.sDamage,
+                nTotal = tonumber(rRoll.nDamage),
+                aDice = {},
+                bSecret = bSecret
+            }
+            if ActionHealthD20 and ActionHealthD20.apply then
+                ActionDamage_applyDamage(rSource, rTarget or rSource, rDamageRoll)
+            elseif isClientFGU() then
                 ActionDamage_applyDamage(rSource, rTarget or rSource, rDamageRoll)
             else
-                ActionDamage_applyDamage(rSource, rTarget or rSource, rRoll.bSecret, rRoll.sDamage, nDamage)
+                ActionDamage_applyDamage(rSource, rTarget or rSource, bSecret, rRoll.sDamage, tonumber(rRoll.nDamage))
             end
         end
     end
 end
 
-function serializeTable(tbl)
-    local result = "{"
-    local first = true
-
-    for key, value in pairs(tbl) do
-        if not first then
-            result = result .. ","
-        end
-
-        if type(key) == "string" then
-            result = result .. '["' .. key .. '"]'
-        else
-            result = result .. "[" .. key .. "]"
-        end
-
-        result = result .. "="
-
-        if type(value) == "table" then
-            result = result .. serializeTable(value)
-        elseif type(value) == "string" then
-            result = result .. '"' .. value .. '"'
-        else
-            result = result .. tostring(value)
-        end
-
-        first = false
-    end
-
-    result = result .. "}"
-    return result
-end
-
-function deserializeTable(str)
-    local function parseValue(value)
-        if value == "true" then
-            return true
-        elseif value == "false" then
-            return false
-        elseif tonumber(value) then
-            return tonumber(value)
-        else
-            return value:sub(2, -2)
-        end
-    end
-
-    local function parsePair(key, value)
-        return key, parseValue(value)
-    end
-
-    local tbl = {}
-    local startIdx = 1
-    endIndex, key, value = select(2, str:find('%[%"(.-)%"]=([^,}]+)', startIdx))
-    while key ~= nil and value ~= nil do
-        parsedKey, parsedValue = parsePair(key, value)
-        tbl[parsedKey] = parsedValue
-        startIdx = endIndex + 1
-        endIndex, key, value = select(2, str:find('%[%"(.-)%"]=([^,}]+)', startIdx))
-    end
-
-    return tbl
-end
 
 function trim(s)
     return (s:gsub("^%s*(.-)%s*$", "%1"))
  end
+
+function getOrCreateStrengthOfTheGravePower(vActor)
+    if not vActor or not ActorManager.isPC(vActor) then return nil end
+
+    local rCurrentActor = ActorManager.resolveActor(vActor)
+    local nodeCharSheet = DB.findNode(rCurrentActor.sCreatureNode)
+    for _,vPower in pairs(DB.getChildren(nodeCharSheet, "powers")) do
+        if DB.getValue(vPower, NAME, ""):lower() == "strength of the grave" then
+            return vPower
+        end
+    end
+
+    local nodePowers = nodeCharSheet.createChild("powers")
+    if not nodePowers then
+        return nil;
+    end
+
+    local nodeNewPower = nodePowers.createChild()
+    if not nodeNewPower then
+        return nil
+    end
+
+    DB.setValue(nodeNewPower, NAME, "string", "Strength of the Grave")
+    DB.setValue(nodeNewPower, "prepared", "number", 1)
+    DB.setValue(nodeNewPower, "cast", "number", 0)
+    DB.setValue(nodeNewPower, "locked", "number", 1)
+    DB.setValue(nodeNewPower, "shortdescription", "string", "When you are reduced to 0 hit points and are not killed outright, you can make a Charisma saving throw. If you succeed, you drop to 1 hit point instead. You can't use this feature again until you finish a long rest.")
+    return nodeNewPower
+end
+
+function getPreparedAndCastFromStrengthOfTheGravePower(vPower)
+    return DB.getValue(vPower, "prepared", 0), DB.getValue(vPower, "cast", 0)
+end
+
+function setCastValueOnPower(vPower, nCast)
+    DB.setValue(vPower, "cast", "number", nCast)
+end
+
+function hasAvailableStrengthOfTheGrave(aData)
+    return aData
+           and aData.nPrepared > 0
+           and aData.nCast < aData.nPrepared
+end
 
 function hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, rRoll)
     local aTraits
@@ -312,6 +331,10 @@ function getStrengthOfTheGraveData(aDecomposedTraitName, aTraits, sTargetNodeTyp
     local nStaticDC = tonumber(sTrimmedSuffixLower:match("dc%s*(-?%d+)"))
     local nModDC = tonumber(sTrimmedSuffixLower:match("mod%s*(-?%d+)"))
     local bNoMods = trim(sTrimmedSuffixLower):find("no%s*mods")
+
+    local vPower = getOrCreateStrengthOfTheGravePower(nodeTarget)
+    local nPrepared, nCast = getPreparedAndCastFromStrengthOfTheGravePower(vPower)
+
     local aTargetHealthData = getTargetHealthData(sTargetNodeType, nodeTarget, rRoll)
     return {
         nTotalHP = aTargetHealthData.nTotalHP,
@@ -320,6 +343,8 @@ function getStrengthOfTheGraveData(aDecomposedTraitName, aTraits, sTargetNodeTyp
         aTraits = aTraits,
         nStaticDC = nStaticDC,
         nModDC = nModDC,
+        nPrepared = nPrepared,
+        nCast = nCast,
         bNoMods = bNoMods,
         sTrimmedTraitNameForSave = aDecomposedTraitName.sTrimmedTraitNameForSave
     }
@@ -347,19 +372,30 @@ function getDecomposedTraitName(aTrait)
     }
 end
 
-function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret, rDamageRoll)
+function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
     local nAllHP = aData.nTotalHP + aData.nTempHP
     if aData.nWounds + nTotal >= nAllHP
        and (aData.bNoMods or not string.find(sDamage, "%[TYPE:.*radiant.*%]"))
        and (aData.bNoMods or not string.find(sDamage, "%[CRITICAL%]"))
        and not EffectManager5E.hasEffect(rTarget, UNCONSCIOUS_EFFECT_LABEL)
        and aData.nTotalHP > aData.nWounds then
+
+        local sDisplayName = ActorManager.getDisplayName(rTarget)
+        local vPower = getOrCreateStrengthOfTheGravePower(rTarget)
+        local nPrepared, nCast = getPreparedAndCastFromStrengthOfTheGravePower(vPower)
+
+        if nCast >= nPrepared then
+            displayChatMessage(sDisplayName .. " has used all of their Strength of the Grave for the day.")
+            return
+        end
+
         local rRoll = { }
         rRoll.sType = "save"
         rRoll.aDice = { "d20" }
         local nMod, bADV, bDIS, sAddText = ActorManager5E.getSave(rTarget, "charisma")
         rRoll.nMod = nMod
         rRoll.sDesc = "[SAVE] Charisma for " .. aData.sTrimmedTraitNameForSave
+        rRoll.sSaveDesc = ""
         if sAddText and sAddText ~= "" then
             rRoll.sDesc = rRoll.sDesc .. " " .. sAddText
         end
@@ -382,9 +418,6 @@ function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret, rDa
         rRoll.sModDC = tostring(aData.nModDC) -- override number, can be nil
         rRoll.sStaticDC = tostring(aData.nStaticDC) -- override number, can be nil
         rRoll.sTrimmedTraitNameForSave = aData.sTrimmedTraitNameForSave
-        if rDamageRoll ~= nil then
-            rRoll.rDamageRoll = serializeTable(rDamageRoll)
-        end
 
         ModifierStack.reset()  -- Modifiers were being applied to the save from the original dmg roll.  Clear it before save.
         ActionsManager.applyModifiersAndRoll(rTarget, rTarget, false, rRoll)
@@ -399,7 +432,7 @@ function applyDamage_FGC(rSource, rTarget, bSecret, sDamage, nTotal)
     local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, nil)
     local bStrengthOfTheGraveTriggered
     if aData then
-        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret, nil)
+        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
     end
 
     if not bStrengthOfTheGraveTriggered then
@@ -414,7 +447,31 @@ function applyDamage_FGU(rSource, rTarget, rRoll)
     local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, rRoll)
     local bStrengthOfTheGraveTriggered
     if aData then
-        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, rRoll.nTotal, rRoll.sDesc, rTarget, false, rRoll)
+        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, rRoll.nTotal, rRoll.sDesc, rTarget, false)
+    end
+
+    if not bStrengthOfTheGraveTriggered then
+        ActionDamage_applyDamage(rSource, rTarget, rRoll)
+    end
+end
+
+function applyDamage_v2(rSource, rTarget, rRoll)
+	local sTargetNodeType, nodeTarget = ActorManager.getTypeAndNode(rTarget)
+	if not nodeTarget then return end
+
+    local isDamageRoll = true
+    if rRoll and rRoll.sDesc then
+        if rRoll.sDesc:match("%[HEAL") or rRoll.sDesc:match("%[RECOVERY") or rRoll.sDesc:match("%[FHEAL") or rRoll.sDesc:match("%[REGEN") then
+            isDamageRoll = false
+        elseif (rRoll.nTotal or 0) < 0 then
+            isDamageRoll = false
+        end
+    end
+
+    local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, rRoll)
+    local bStrengthOfTheGraveTriggered
+    if aData and isDamageRoll and hasAvailableStrengthOfTheGrave(aData) then
+        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, rRoll.nTotal, rRoll.sDesc, rTarget, rRoll.bSecret)
     end
 
     if not bStrengthOfTheGraveTriggered then
