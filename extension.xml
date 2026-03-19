@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="iso-8859-1"?>
 <root version="3.3" release="8.1|CoreRPG:4.1">
-	<announcement text="Strength of the Grave v1.0.3 FGC/FGU 5E\r2026 Justin Freitas, 3/18/26" font="emotefont" icon="strengthofthegrave_icon" />
+	<announcement text="Strength of the Grave v1.0.3 FGC/FGU 5E\r2025-2026 Justin Freitas, 3/18/26" font="emotefont" icon="strengthofthegrave_icon" />
 	<properties>
 		<name>Feature: Strength of the Grave</name>
 		<version>1.0.3</version>
