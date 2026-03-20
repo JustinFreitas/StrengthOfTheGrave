@@ -24,6 +24,7 @@ function onInit()
 		Comm.registerSlashHandler("strengthofthegrave", processChatCommand)
         ActionSave_onSave = ActionSave.onSave
         ActionSave.onSave = onSaveNew
+        ActionsManager.registerResultHandler("save", ActionSave.onSave)
         if ActionHealthD20 and ActionHealthD20.apply then
             ActionDamage_applyDamage = ActionHealthD20.apply
             ActionHealthD20.apply = applyDamage_v2
@@ -409,7 +410,7 @@ function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
         end
 
         rRoll.bSecret = bSecret
-        rRoll.bStrengthOfTheGrave = true
+        rRoll.bStrengthOfTheGrave = "true"
         rRoll.nDamage = nTotal
         rRoll.sDamage = sDamage
         rRoll.nTotalHP = aData.nTotalHP
