@@ -67,7 +67,7 @@ function displayChatMessage(sFormattedText)
 end
 
 function applyStrengthOfTheGrave(nodeCT)
-    local sTargetNodeType, nodeTarget = ActorManager.getTypeAndNode(nodeCT)
+    local sTargetNodeType, nodeTarget = getTypeAndNodeSafe(nodeCT)
 	if not nodeTarget then
 		return
 	end
@@ -208,7 +208,7 @@ function trim(s)
 function getOrCreateStrengthOfTheGravePower(vActor)
     if not vActor or not ActorManager.isPC(vActor) then return nil end
 
-    local rCurrentActor = ActorManager.resolveActor(vActor)
+    local rCurrentActor = getActorSafe(vActor)
     local nodeCharSheet = DB.findNode(rCurrentActor.sCreatureNode)
     for _,vPower in pairs(DB.getChildren(nodeCharSheet, "powers")) do
         if DB.getValue(vPower, NAME, ""):lower() == "strength of the grave" then
@@ -427,7 +427,7 @@ function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
 end
 
 function applyDamage_FGC(rSource, rTarget, bSecret, sDamage, nTotal)
-	local sTargetNodeType, nodeTarget = ActorManager.getTypeAndNode(rTarget)
+	local sTargetNodeType, nodeTarget = getTypeAndNodeSafe(rTarget)
 	if not nodeTarget then return end
 
     local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, nil)
@@ -442,7 +442,7 @@ function applyDamage_FGC(rSource, rTarget, bSecret, sDamage, nTotal)
 end
 
 function applyDamage_FGU(rSource, rTarget, rRoll)
-	local sTargetNodeType, nodeTarget = ActorManager.getTypeAndNode(rTarget)
+	local sTargetNodeType, nodeTarget = getTypeAndNodeSafe(rTarget)
 	if not nodeTarget then return end
 
     local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, rRoll)
@@ -457,7 +457,7 @@ function applyDamage_FGU(rSource, rTarget, rRoll)
 end
 
 function applyDamage_v2(rSource, rTarget, rRoll)
-	local sTargetNodeType, nodeTarget = ActorManager.getTypeAndNode(rTarget)
+	local sTargetNodeType, nodeTarget = getTypeAndNodeSafe(rTarget)
 	if not nodeTarget then return end
 
     local isDamageRoll = true
@@ -479,3 +479,4 @@ function applyDamage_v2(rSource, rTarget, rRoll)
         ActionDamage_applyDamage(rSource, rTarget, rRoll)
     end
 end
+
