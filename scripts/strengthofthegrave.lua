@@ -1,8 +1,8 @@
 -- This extension contains 5e SRD mounted combat rules.  For license details see file: Open Gaming License v1.0a.txt
-USER_ISHOST = false
+local USER_ISHOST = false
 
 local ActionDamage_applyDamage
-local ActionSave_onSave
+local ActionSave_onSave_Ruleset
 local DEFAULT_STRENGTH_OF_THE_GRAVE_DC_MOD = 5
 local HP_TEMPORARY = "hp.temporary"
 local HP_TOTAL = "hp.total"
@@ -15,25 +15,121 @@ local NIL = "nil"
 local UNCONSCIOUS_EFFECT_LABEL = "Unconscious"
 local WOUNDS = "wounds"
 
+-- Helper to safely check if a string is blank, preferring the modern StringManager method.
+local function isBlankSafe(s)
+    if StringManager.isBlank then
+        return StringManager.isBlank(s)
+    end
+    if type(s) ~= "string" then
+        return false
+    end
+    return (string.gsub(s, "%s+", "") == "")
+end
+
+-- Helper to safely get an actor from a node/string, preferring the modern getActor method.
+local function getActorSafe(v)
+    if ActorManager.getActor then
+        return ActorManager.getActor(v)
+    end
+    return ActorManager.resolveActor(v)
+end
+
+-- Helper to safely get an actor's type and node, preferring the modern getTypeAndNode method.
+local function getTypeAndNodeSafe(v)
+    if ActorManager.getTypeAndNode then
+        return ActorManager.getTypeAndNode(v)
+    end
+    return ActorManager.getActorTypeAndNode(v)
+end
+
+-- Helper to safely check for effects, preferring the modern CoreRPG or 5E-specific EffectManager if available.
+local function hasEffectSafe(rActor, sEffect, rTarget, bTargetedOnly)
+    if EffectManager.hasEffect then
+        return EffectManager.hasEffect(rActor, sEffect, rTarget, bTargetedOnly)
+    end
+    if EffectManager5E and EffectManager5E.hasEffect then
+        return EffectManager5E.hasEffect(rActor, sEffect, rTarget, bTargetedOnly)
+    end
+    return EffectManager.hasEffect(rActor, sEffect)
+end
+
+-- Helper to safely fetch saves from the 5E ruleset.
+local function getSaveSafe(nodeActor, sSave)
+    if ActorManager5E and ActorManager5E.getSave then
+        return ActorManager5E.getSave(nodeActor, sSave)
+    end
+    return 0, false, false, ""
+end
+
+-- Helper to safely call the ruleset's damage application function.
+local function applyDamageFinal(rSource, rTarget, rRoll, bSecret, sDamage, nTotal)
+    if type(ActionDamage_applyDamage) == "function" then
+        if isClientFGU() then
+            ActionDamage_applyDamage(rSource, rTarget, rRoll)
+        else
+            ActionDamage_applyDamage(rSource, rTarget, bSecret, sDamage, nTotal)
+        end
+    elseif ActionHealthD20 and type(ActionHealthD20.apply) == "function" then
+         ActionHealthD20.apply(rSource, rTarget, rRoll)
+    elseif ActionDamage then
+        if type(ActionDamage.applyDamage) == "function" then
+            if isClientFGU() then
+                ActionDamage.applyDamage(rSource, rTarget, rRoll)
+            else
+                ActionDamage.applyDamage(rSource, rTarget, bSecret, sDamage, nTotal)
+            end
+        elseif type(ActionDamage.apply) == "function" then
+            if isClientFGU() then
+                ActionDamage.apply(rSource, rTarget, rRoll)
+            else
+                ActionDamage.apply(rSource, rTarget, bSecret, sDamage, nTotal)
+            end
+        end
+    end
+end
+
 function onInit()
     USER_ISHOST = User.isHost()
+
+    -- Initialize upvalues on all instances (Host and Client)
+    if ActionHealthD20 and ActionHealthD20.apply then
+        ActionDamage_applyDamage = ActionHealthD20.apply
+    elseif ActionDamage then
+        if ActionDamage.applyDamage then
+            ActionDamage_applyDamage = ActionDamage.applyDamage
+        elseif ActionDamage.apply then
+            ActionDamage_applyDamage = ActionDamage.apply
+        end
+    end
+
+    -- Capture ruleset result handlers from ActionsManager (Host and Client)
+    -- This ensures we get the actual local functions even if they aren't in the global table.
+    ActionSave_onSave_Ruleset = ActionsManager.getResultHandler("save")
+
+    -- Register result handlers on all instances
+    ActionsManager.registerResultHandler("save", onSaveNew)
 
 	if USER_ISHOST then
 		Comm.registerSlashHandler("sg", processChatCommand)
 		Comm.registerSlashHandler("sotg", processChatCommand)
 		Comm.registerSlashHandler("strengthofthegrave", processChatCommand)
-        ActionSave_onSave = ActionSave.onSave
-        ActionSave.onSave = onSaveNew
-        ActionsManager.registerResultHandler("save", ActionSave.onSave)
+        
+        -- Hook damage functions to intercept damage rolls
         if ActionHealthD20 and ActionHealthD20.apply then
-            ActionDamage_applyDamage = ActionHealthD20.apply
             ActionHealthD20.apply = applyDamage_v2
-        elseif ActionDamage and ActionDamage.applyDamage then
-            ActionDamage_applyDamage = ActionDamage.applyDamage
-            if isClientFGU() then
-                ActionDamage.applyDamage = applyDamage_FGU
-            else
-                ActionDamage.applyDamage = applyDamage_FGC
+        elseif ActionDamage then
+            if ActionDamage.applyDamage then
+                if isClientFGU() then
+                    ActionDamage.applyDamage = applyDamage_FGU
+                else
+                    ActionDamage.applyDamage = applyDamage_FGC
+                end
+            elseif ActionDamage.apply then
+                if isClientFGU() then
+                    ActionDamage.apply = applyDamage_FGU
+                else
+                    ActionDamage.apply = applyDamage_FGC
+                end
             end
         end
     end
@@ -60,7 +156,7 @@ function processChatCommand(_, sParams)
 end
 
 function displayChatMessage(sFormattedText)
-	if not sFormattedText then return end
+	if isBlankSafe(sFormattedText) then return end
 
 	local msg = {font = MSGFONT, icon = "strengthofthegrave_icon", secret = true, text = sFormattedText}
     Comm.addChatMessage(msg) -- local, not broadcast
@@ -82,7 +178,7 @@ function applyStrengthOfTheGrave(nodeCT)
 	end
 
     local sDisplayName = ActorManager.getDisplayName(nodeTarget)
-    if not EffectManager5E.hasEffect(nodeTarget, UNCONSCIOUS_EFFECT_LABEL) then
+    if not hasEffectSafe(nodeTarget, UNCONSCIOUS_EFFECT_LABEL) then
         displayChatMessage(sDisplayName .. " is not an unconscious actor, skipping StrengthOfTheGrave application.")
         return
     end
@@ -100,20 +196,21 @@ function isClientFGU()
 end
 
 function onSaveNew(rSource, rTarget, rRoll)
+    -- Passthrough to ruleset handler
+    if type(ActionSave_onSave_Ruleset) == "function" then
+        ActionSave_onSave_Ruleset(rSource, rTarget, rRoll)
+    end
+
     if rRoll.bStrengthOfTheGrave == nil then
-        if ActionSave_onSave then
-            ActionSave_onSave(rSource, rTarget, rRoll)
-        end
         return
     end
 
+    -- Explicitly decode advantage/disadvantage using 5E-specific managers to ensure we don't just sum all dice.
     if ActionD20 and ActionD20.decodeAdvantage then
         ActionD20.decodeAdvantage(rRoll)
     elseif ActionsManager2 and ActionsManager2.decodeAdvantage then
         ActionsManager2.decodeAdvantage(rRoll)
     end
-	local rMessage = ActionsManager.createActionMessage(rSource, rRoll)
-	Comm.deliverChatMessage(rMessage)
 
     local nModDC
     if rRoll.sModDC == nil or rRoll.sModDC == NIL then
@@ -148,11 +245,16 @@ function onSaveNew(rSource, rTarget, rRoll)
 		msgLong.text = msgLong.text .. " [FAILURE]"
 	end
 
-    ActionsManager.outputResult(rRoll.bSecret, rSource, nil, msgLong, msgShort)
+    local bSecret = (rRoll.bSecret == "1" or rRoll.bSecret == true)
+    ActionsManager.outputResult(bSecret, rSource, nil, msgLong, msgShort)
 
     -- Strength of the Grave processing
-    local nAllHP = rRoll.nTotalHP + rRoll.nTempHP
-    local bSecret = (rRoll.bSecret == "1" or rRoll.bSecret == true)
+    local nAllHP = tonumber(rRoll.nTotalHP or 0) + tonumber(rRoll.nTempHP or 0)
+    local rOriginalAttacker = nil
+    if rRoll.sOriginalAttacker then
+        rOriginalAttacker = getActorSafe(rRoll.sOriginalAttacker)
+    end
+    local rActualSource = rOriginalAttacker or rSource
 
     if nChaSave >= nDC then
         -- Strength of the Grave save was made!
@@ -161,7 +263,7 @@ function onSaveNew(rSource, rTarget, rRoll)
         if nCast < nPrepared then
             setCastValueOnPower(vPower, nCast + 1)
         end
-        nDamage = nAllHP - rRoll.nWounds - 1
+        nDamage = nAllHP - tonumber(rRoll.nWounds or 0) - 1
         local sDamage = string.gsub(rRoll.sDamage, "=%-?%d+", "=" .. nDamage)
 
         local rDamageRoll = {
@@ -171,14 +273,7 @@ function onSaveNew(rSource, rTarget, rRoll)
             aDice = {},
             bSecret = bSecret
         }
-
-        if ActionHealthD20 and ActionHealthD20.apply then
-            ActionDamage_applyDamage(rSource, rTarget or rSource, rDamageRoll)
-        elseif isClientFGU() then
-            ActionDamage_applyDamage(rSource, rTarget or rSource, rDamageRoll)
-        else
-            ActionDamage_applyDamage(rSource, rTarget or rSource, bSecret, sDamage, nDamage)
-        end
+        applyDamageFinal(rActualSource, rTarget or rSource, rDamageRoll, bSecret, sDamage, nDamage)
     else
         -- Strength of the Grave save was NOT made
         if tonumber(rRoll.nWounds) < tonumber(rRoll.nTotalHP) then
@@ -189,13 +284,7 @@ function onSaveNew(rSource, rTarget, rRoll)
                 aDice = {},
                 bSecret = bSecret
             }
-            if ActionHealthD20 and ActionHealthD20.apply then
-                ActionDamage_applyDamage(rSource, rTarget or rSource, rDamageRoll)
-            elseif isClientFGU() then
-                ActionDamage_applyDamage(rSource, rTarget or rSource, rDamageRoll)
-            else
-                ActionDamage_applyDamage(rSource, rTarget or rSource, bSecret, rRoll.sDamage, tonumber(rRoll.nDamage))
-            end
+            applyDamageFinal(rActualSource, rTarget or rSource, rDamageRoll, bSecret, rRoll.sDamage, tonumber(rRoll.nDamage))
         end
     end
 end
@@ -373,12 +462,12 @@ function getDecomposedTraitName(aTrait)
     }
 end
 
-function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
+function processStrengthOfTheGrave(aData, nTotal, sDamage, rSource, rTarget, bSecret)
     local nAllHP = aData.nTotalHP + aData.nTempHP
     if aData.nWounds + nTotal >= nAllHP
        and (aData.bNoMods or not string.find(sDamage, "%[TYPE:.*radiant.*%]"))
        and (aData.bNoMods or not string.find(sDamage, "%[CRITICAL%]"))
-       and not EffectManager5E.hasEffect(rTarget, UNCONSCIOUS_EFFECT_LABEL)
+       and not hasEffectSafe(rTarget, UNCONSCIOUS_EFFECT_LABEL)
        and aData.nTotalHP > aData.nWounds then
 
         local sDisplayName = ActorManager.getDisplayName(rTarget)
@@ -393,7 +482,7 @@ function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
         local rRoll = { }
         rRoll.sType = "save"
         rRoll.aDice = { "d20" }
-        local nMod, bADV, bDIS, sAddText = ActorManager5E.getSave(rTarget, "charisma")
+        local nMod, bADV, bDIS, sAddText = getSaveSafe(rTarget, "charisma")
         rRoll.nMod = nMod
         rRoll.sDesc = "[SAVE] Charisma for " .. aData.sTrimmedTraitNameForSave
         rRoll.sSaveDesc = ""
@@ -419,6 +508,9 @@ function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
         rRoll.sModDC = tostring(aData.nModDC) -- override number, can be nil
         rRoll.sStaticDC = tostring(aData.nStaticDC) -- override number, can be nil
         rRoll.sTrimmedTraitNameForSave = aData.sTrimmedTraitNameForSave
+        if rSource ~= nil then
+            rRoll.sOriginalAttacker = ActorManager.getCreatureNodeName(rSource)
+        end
 
         ModifierStack.reset()  -- Modifiers were being applied to the save from the original dmg roll.  Clear it before save.
         ActionsManager.applyModifiersAndRoll(rTarget, rTarget, false, rRoll)
@@ -433,11 +525,11 @@ function applyDamage_FGC(rSource, rTarget, bSecret, sDamage, nTotal)
     local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, nil)
     local bStrengthOfTheGraveTriggered
     if aData then
-        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
+        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, nTotal, sDamage, rSource, rTarget, bSecret)
     end
 
     if not bStrengthOfTheGraveTriggered then
-        ActionDamage_applyDamage(rSource, rTarget, bSecret, sDamage, nTotal)
+        applyDamageFinal(rSource, rTarget, nil, bSecret, sDamage, nTotal)
     end
 end
 
@@ -448,11 +540,11 @@ function applyDamage_FGU(rSource, rTarget, rRoll)
     local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, rRoll)
     local bStrengthOfTheGraveTriggered
     if aData then
-        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, rRoll.nTotal, rRoll.sDesc, rTarget, false)
+        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, rRoll.nTotal, rRoll.sDesc, rSource, rTarget, false)
     end
 
     if not bStrengthOfTheGraveTriggered then
-        ActionDamage_applyDamage(rSource, rTarget, rRoll)
+        applyDamageFinal(rSource, rTarget, rRoll)
     end
 end
 
@@ -472,11 +564,10 @@ function applyDamage_v2(rSource, rTarget, rRoll)
     local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, rRoll)
     local bStrengthOfTheGraveTriggered
     if aData and isDamageRoll and hasAvailableStrengthOfTheGrave(aData) then
-        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, rRoll.nTotal, rRoll.sDesc, rTarget, rRoll.bSecret)
+        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, rRoll.nTotal, rRoll.sDesc, rSource, rTarget, rRoll.bSecret)
     end
 
     if not bStrengthOfTheGraveTriggered then
-        ActionDamage_applyDamage(rSource, rTarget, rRoll)
+        applyDamageFinal(rSource, rTarget, rRoll)
     end
 end
-
