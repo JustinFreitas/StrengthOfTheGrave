@@ -1,4 +1,5 @@
 readme.txt
+luacheck.exe
 scripts/.luacheckrc
 build/out/StrengthOfTheGrave.ext
 build/out/StrengthOfTheGrave.zip

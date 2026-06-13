@@ -34,8 +34,21 @@ local function getActorSafe(v)
     return ActorManager.resolveActor(v)
 end
 
--- Helper to safely get an actor's type and node, preferring the modern getTypeAndNode method.
+-- Helper to safely get an actor's type and node, preferring modern non-deprecated methods.
 local function getTypeAndNodeSafe(v)
+    if ActorManager.isPC and ActorManager.getCreatureNode and ActorManager.getCTNode then
+        local bIsPC = ActorManager.isPC(v)
+        if bIsPC then
+            return "pc", ActorManager.getCreatureNode(v)
+        end
+        -- Only treat as "ct" when an actual CT node exists; otherwise the health-data
+        -- readers would look for CT-only fields (hptotal/wounds) on a bare creature node.
+        local nodeCT = ActorManager.getCTNode(v)
+        if nodeCT then
+            return "ct", nodeCT
+        end
+        return nil, ActorManager.getCreatureNode(v)
+    end
     if ActorManager.getTypeAndNode then
         return ActorManager.getTypeAndNode(v)
     end
@@ -113,7 +126,7 @@ function onInit()
 		Comm.registerSlashHandler("sg", processChatCommand)
 		Comm.registerSlashHandler("sotg", processChatCommand)
 		Comm.registerSlashHandler("strengthofthegrave", processChatCommand)
-        
+
         -- Hook damage functions to intercept damage rolls
         if ActionHealthD20 and ActionHealthD20.apply then
             ActionHealthD20.apply = applyDamage_v2
@@ -162,6 +175,9 @@ function displayChatMessage(sFormattedText)
     Comm.addChatMessage(msg) -- local, not broadcast
 end
 
+-- Manual GM override (CT right-click / slash command). Deliberately bypasses the
+-- prepared/cast charge check and the trait presence check that the automated damage
+-- path enforces -- it only requires the actor be Unconscious and simply sets them to 1 HP.
 function applyStrengthOfTheGrave(nodeCT)
     local sTargetNodeType, nodeTarget = getTypeAndNodeSafe(nodeCT)
 	if not nodeTarget then
@@ -212,19 +228,21 @@ function onSaveNew(rSource, rTarget, rRoll)
         ActionsManager2.decodeAdvantage(rRoll)
     end
 
+    -- FG serializes roll fields as strings, and an absent override comes back as the
+    -- literal string "nil" (NIL) rather than a real nil -- so we test for both here.
     local nModDC
     if rRoll.sModDC == nil or rRoll.sModDC == NIL then
         nModDC = DEFAULT_STRENGTH_OF_THE_GRAVE_DC_MOD
     else
-        nModDC = tonumber(rRoll.sModDC)
+        nModDC = tonumber(rRoll.sModDC) or DEFAULT_STRENGTH_OF_THE_GRAVE_DC_MOD
     end
 
-    local nDamage = tonumber(rRoll.nDamage)
+    local nDamage = tonumber(rRoll.nDamage) or 0
     local nDC
     if rRoll.sStaticDC == nil or rRoll.sStaticDC == NIL then
         nDC = nModDC + nDamage
     else
-        nDC = tonumber(rRoll.sStaticDC)
+        nDC = tonumber(rRoll.sStaticDC) or (nModDC + nDamage)
     end
 
     local msgShort = {font = MSGFONT}
@@ -263,20 +281,26 @@ function onSaveNew(rSource, rTarget, rRoll)
         if nCast < nPrepared then
             setCastValueOnPower(vPower, nCast + 1)
         end
-        nDamage = nAllHP - tonumber(rRoll.nWounds or 0) - 1
-        local sDamage = string.gsub(rRoll.sDamage, "=%-?%d+", "=" .. nDamage)
+        -- Calculate specific damage amount needed to leave exactly 1 HP.
+        local nDamageToApply = nAllHP - tonumber(rRoll.nWounds or 0) - 1
+        -- Rewrite the "=N" damage token so the displayed amount matches what we actually apply.
+        -- If the description has no such token, append one so the two never diverge.
+        local sDamage, nReplaced = string.gsub(rRoll.sDamage or "", "=%-?%d+", "=" .. nDamageToApply)
+        if nReplaced == 0 then
+            sDamage = sDamage .. " [=" .. nDamageToApply .. "]"
+        end
 
         local rDamageRoll = {
             sType = "damage",
             sDesc = sDamage,
-            nTotal = tonumber(nDamage),
+            nTotal = tonumber(nDamageToApply),
             aDice = {},
             bSecret = bSecret
         }
-        applyDamageFinal(rActualSource, rTarget or rSource, rDamageRoll, bSecret, sDamage, nDamage)
+        applyDamageFinal(rActualSource, rTarget or rSource, rDamageRoll, bSecret, sDamage, nDamageToApply)
     else
         -- Strength of the Grave save was NOT made
-        if tonumber(rRoll.nWounds) < tonumber(rRoll.nTotalHP) then
+        if tonumber(rRoll.nWounds or 0) < tonumber(rRoll.nTotalHP or 0) then
             local rDamageRoll = {
                 sType = "damage",
                 sDesc = rRoll.sDamage,
@@ -319,7 +343,7 @@ function getOrCreateStrengthOfTheGravePower(vActor)
     DB.setValue(nodeNewPower, "prepared", "number", 1)
     DB.setValue(nodeNewPower, "cast", "number", 0)
     DB.setValue(nodeNewPower, "locked", "number", 1)
-    DB.setValue(nodeNewPower, "shortdescription", "string", "When you are reduced to 0 hit points and are not killed outright, you can make a Charisma saving throw. If you succeed, you drop to 1 hit point instead. You can't use this feature again until you finish a long rest.")
+    DB.setValue(nodeNewPower, "shortdescription", "string", "When you are reduced to 0 hit points and are not killed outright, you can make a Charisma saving throw. If you succeed, you drop to 1 hit point instead. You can't use this feature again until you finish a long rest.") -- luacheck: ignore 631
     return nodeNewPower
 end
 
@@ -420,7 +444,7 @@ function getStrengthOfTheGraveData(aDecomposedTraitName, aTraits, sTargetNodeTyp
     local sTrimmedSuffixLower = trim(aDecomposedTraitName.sStrengthOfTheGraveTraitSuffix):lower()
     local nStaticDC = tonumber(sTrimmedSuffixLower:match("dc%s*(-?%d+)"))
     local nModDC = tonumber(sTrimmedSuffixLower:match("mod%s*(-?%d+)"))
-    local bNoMods = trim(sTrimmedSuffixLower):find("no%s*mods")
+    local bNoMods = trim(sTrimmedSuffixLower):find("no%s*mods") ~= nil
 
     local vPower = getOrCreateStrengthOfTheGravePower(nodeTarget)
     local nPrepared, nCast = getPreparedAndCastFromStrengthOfTheGravePower(vPower)
@@ -463,10 +487,11 @@ function getDecomposedTraitName(aTrait)
 end
 
 function processStrengthOfTheGrave(aData, nTotal, sDamage, rSource, rTarget, bSecret)
+    local nDamageTotal = tonumber(nTotal or 0)
     local nAllHP = aData.nTotalHP + aData.nTempHP
-    if aData.nWounds + nTotal >= nAllHP
-       and (aData.bNoMods or not string.find(sDamage, "%[TYPE:.*radiant.*%]"))
-       and (aData.bNoMods or not string.find(sDamage, "%[CRITICAL%]"))
+    if aData.nWounds + nDamageTotal >= nAllHP
+       and (aData.bNoMods or not string.find(sDamage or "", "%[TYPE:[^%]]*radiant[^%]]*%]"))
+       and (aData.bNoMods or not string.find(sDamage or "", "%[CRITICAL%]"))
        and not hasEffectSafe(rTarget, UNCONSCIOUS_EFFECT_LABEL)
        and aData.nTotalHP > aData.nWounds then
 
@@ -500,7 +525,7 @@ function processStrengthOfTheGrave(aData, nTotal, sDamage, rSource, rTarget, bSe
 
         rRoll.bSecret = bSecret
         rRoll.bStrengthOfTheGrave = "true"
-        rRoll.nDamage = nTotal
+        rRoll.nDamage = nDamageTotal
         rRoll.sDamage = sDamage
         rRoll.nTotalHP = aData.nTotalHP
         rRoll.nTempHP = aData.nTempHP
