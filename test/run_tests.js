@@ -249,8 +249,8 @@ async function runTests() {
 
         -- Mock ActionDamage
         appliedDamageTotal = nil
-        function ActionDamage.applyDamage(rSource, rTarget, rRoll)
-            appliedDamageTotal = rRoll.nTotal
+        function ActionDamage.applyDamage(rSource, rTarget, bSecret, sDamage, nTotal)
+            appliedDamageTotal = nTotal
         end
     `);
 
@@ -315,33 +315,30 @@ async function runTests() {
     await runAssert("hasStrengthOfTheGraveTrait total HP", 15, "return aData.nTotalHP");
     await runAssert("hasStrengthOfTheGraveTrait Static DC", 14, "return aData.nStaticDC");
 
-    // --- TEST 3: applyDamage_v2 -> normal damage (HP remains > 0) ---
+    // --- TEST 3: applyDamage_FGC -> normal damage (HP remains > 0) ---
     await lua.doString(`
         appliedDamageTotal = nil
         rolledRoll = nil
-        local roll = { sDesc = "[DAMAGE]", nTotal = 3, bSecret = false }
-        applyDamage_v2(nil, nodeCT, roll)
+        applyDamage_FGC(nil, nodeCT, false, "[DAMAGE]", 3)
     `);
     await runAssert("Normal damage applied (no save)", 3, "return appliedDamageTotal");
     await runAssert("No save roll triggered", true, "return rolledRoll == nil");
 
-    // --- TEST 4: applyDamage_v2 -> save roll triggered (HP drops to 0) ---
+    // --- TEST 4: applyDamage_FGC -> save roll triggered (HP drops to 0) ---
     await lua.doString(`
         appliedDamageTotal = nil
         rolledRoll = nil
-        local roll = { sDesc = "[DAMAGE] sword", nTotal = 6, bSecret = false }
-        applyDamage_v2(nil, nodeCT, roll)
+        applyDamage_FGC(nil, nodeCT, false, "[DAMAGE] sword", 6)
     `);
     // Gromph has 5 HP. 6 damage would drop him to -1. Save should be triggered.
     await runAssert("Save roll was triggered", "save", "return rolledRoll.sType");
     await runAssert("Save roll has bStrengthOfTheGrave", "true", "return rolledRoll.bStrengthOfTheGrave");
 
-    // --- TEST 5: applyDamage_v2 -> Critical hit (no save, damage applies directly) ---
+    // --- TEST 5: applyDamage_FGC -> Critical hit (no save, damage applies directly) ---
     await lua.doString(`
         appliedDamageTotal = nil
         rolledRoll = nil
-        local roll = { sDesc = "[DAMAGE][CRITICAL]", nTotal = 6, bSecret = false }
-        applyDamage_v2(nil, nodeCT, roll)
+        applyDamage_FGC(nil, nodeCT, false, "[DAMAGE][CRITICAL]", 6)
     `);
     await runAssert("Critical damage applied directly (no save)", 6, "return appliedDamageTotal");
     await runAssert("No save triggered for critical", true, "return rolledRoll == nil");
