@@ -2,7 +2,7 @@
 
 https://github.com/JustinFreitas/StrengthOfTheGrave
 
-Strength of the Grave v1.0.2, by Justin Freitas
+Strength of the Grave v1.0.5, by Justin Freitas
 
 ReadMe and Usage Notes
 
@@ -16,3 +16,6 @@ Changelist:
 - v1.0.0 - Initial version, from Undead Fortitude v2.0.5 as base.
 - v1.0.1 - Update icons.  Update gitignore for old UF outputs.
 - v1.0.2 - Any chat messages that are only displayed to the GM should have the red eye icon ('secret = true').
+- v1.0.3 - Changes to support new damage ruleset mechanism. Backward compatible with the older one.
+- v1.0.4 - Fix onSave wiring.
+- v1.0.5 - Restore dual FGC/FGU compatibility: implement checkFGC() version detection, polymorphic (rSource, rTarget, p3, p4, p5) damage signatures supporting FGC 5-argument damage application, getActorSafe/getTypeAndNodeSafe resolution, getSaveSafe Charisma save helper, and /reload idempotency guards.
