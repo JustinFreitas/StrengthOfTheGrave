@@ -1,27 +1,12 @@
 {
-  "name": "strengthofthegrave",
+  "name": "strength-of-the-grave-tests",
   "version": "1.0.0",
-  "description": "https://github.com/JustinFreitas/StrengthOfTheGrave",
-  "main": "index.js",
-  "directories": {
-    "test": "test"
-  },
+  "description": "Unit tests for StrengthOfTheGrave extension using wasmoon",
+  "main": "test/run_tests.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node test/run_tests.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/JustinFreitas/StrengthOfTheGrave.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/JustinFreitas/StrengthOfTheGrave/issues"
-  },
-  "homepage": "https://github.com/JustinFreitas/StrengthOfTheGrave#readme",
-  "devDependencies": {
+  "dependencies": {
     "wasmoon": "^1.16.0"
   }
 }
