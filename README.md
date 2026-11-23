@@ -2,7 +2,7 @@
 
 https://github.com/JustinFreitas/StrengthOfTheGrave
 
-Strength of the Grave v1.6.0, by Justin Freitas
+Strength of the Grave v1.6.1, by Justin Freitas
 
 ReadMe and Usage Notes
 
@@ -27,3 +27,4 @@ Changelist:
 - v1.4 - Use modern non-deprecated ActorManager methods for actor type and node resolution.
 - v1.5 - Nil-safety and correctness fixes (DC and damage guards, boolean normalization, tightened radiant match, safer type/node resolution); add luacheck config and clear the lint.
 - v1.6.0 - Restore dual FGC/FGU compatibility: implement checkFGC() version detection, polymorphic (rSource, rTarget, p3, p4, p5) damage signatures supporting FGC 5-argument damage application, getActorSafe/getTypeAndNodeSafe resolution, getSaveSafe Charisma save helper, and /reload idempotency guards.
+- v1.6.1 - Fix multi-type damage clause capping (proportional distribution across damage types to prevent damage total mismatch), preserve attacker source actor for reaction routing, route saving throws through ActionsManager.performAction for standard ruleset action flow, and fix vehicle CT actor lookup.
