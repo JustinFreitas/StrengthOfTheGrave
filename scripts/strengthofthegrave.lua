@@ -117,6 +117,46 @@ local function getSaveSafe(nodeActor, sSave)
     return 0, false, false, ""
 end
 
+-- Helper to safely call the ruleset's save roll execution function.
+local function rollSaveSafe(rSource, rTarget, rRoll)
+    if ActionsManager and ActionsManager.performAction then
+        ActionsManager.performAction(nil, rSource, rRoll)
+    elseif ActionsManager and ActionsManager.applyModifiersAndRoll then
+        ActionsManager.applyModifiersAndRoll(rSource, rTarget, false, rRoll)
+    end
+end
+
+-- Helper to distribute capped damage across [TYPE: ... (...=N)] clauses without breaking ActionHealthD20.applyDecodeDamage sum validation.
+function capDamageDescClauses(sDamage, nDamageToApply)
+    if not sDamage then
+        return ""
+    end
+    local bHasTypeClauses = false
+    local nRemaining = math.max(0, tonumber(nDamageToApply) or 0)
+    local sResult = string.gsub(sDamage, "(%[TYPE: [^(]* %([^=]+%=)(%-?%d+)(%)%])", function(sPrefix, sVal, sSuffix)
+        bHasTypeClauses = true
+        local nClauseVal = math.max(0, tonumber(sVal) or 0)
+        local nAlloc = math.min(nClauseVal, nRemaining)
+        nRemaining = nRemaining - nAlloc
+        return sPrefix .. tostring(nAlloc) .. sSuffix
+    end)
+    if bHasTypeClauses then
+        if nRemaining > 0 then
+            local bAdded = false
+            sResult = string.gsub(sResult, "(%[TYPE: [^(]* %([^=]+%=)(%-?%d+)(%)%])", function(sPrefix, sVal, sSuffix)
+                if not bAdded then
+                    bAdded = true
+                    local nClauseVal = tonumber(sVal) or 0
+                    return sPrefix .. tostring(nClauseVal + nRemaining) .. sSuffix
+                end
+                return sPrefix .. sVal .. sSuffix
+            end)
+        end
+        return sResult
+    end
+    return string.gsub(sDamage, "=%-?%d+", "=" .. tostring(nDamageToApply))
+end
+
 -- Helper to safely call the ruleset's damage application function.
 local function applyDamageFinal(rSource, rTarget, p3, p4, p5)
     if type(p3) == "table" then
@@ -316,6 +356,7 @@ function onSaveNew(rSource, rTarget, rRoll)
     -- Strength of the Grave processing
     local nAllHP = rRoll.nTotalHP + rRoll.nTempHP
     local bSecret = (rRoll.bSecret == "1" or rRoll.bSecret == true)
+    local rActualSource = (rRoll.sOriginalAttacker and ActorManager.resolveActor and ActorManager.resolveActor(rRoll.sOriginalAttacker)) or rSource
 
     if nChaSave >= nDC then
         -- Strength of the Grave save was made!
@@ -325,7 +366,7 @@ function onSaveNew(rSource, rTarget, rRoll)
             setCastValueOnPower(vPower, nCast + 1)
         end
         nDamage = nAllHP - rRoll.nWounds - 1
-        local sDamage = string.gsub(rRoll.sDamage, "=%-?%d+", "=" .. nDamage)
+        local sDamage = capDamageDescClauses(rRoll.sDamage, nDamage)
 
         local rDamageRoll = {
             sType = "damage",
@@ -335,7 +376,7 @@ function onSaveNew(rSource, rTarget, rRoll)
             bSecret = bSecret
         }
 
-        applyDamageFinal(rSource, rTarget or rSource, rDamageRoll)
+        applyDamageFinal(rActualSource, rTarget or rSource, rDamageRoll)
     else
         -- Strength of the Grave save was NOT made
         if tonumber(rRoll.nWounds) < tonumber(rRoll.nTotalHP) then
@@ -346,7 +387,7 @@ function onSaveNew(rSource, rTarget, rRoll)
                 aDice = {},
                 bSecret = bSecret
             }
-            applyDamageFinal(rSource, rTarget or rSource, rDamageRoll)
+            applyDamageFinal(rActualSource, rTarget or rSource, rDamageRoll)
         end
     end
 end
@@ -468,10 +509,6 @@ function getTargetHealthData_FGU(sTargetNodeType, nodeTarget, rRoll)
         nTotalHP = DB.getValue(nodeTarget, HP_TOTAL, 0)
         nTempHP = DB.getValue(nodeTarget, HP_TEMPORARY, 0)
         nWounds = DB.getValue(nodeTarget, HP_WOUNDS, 0)
-    elseif sTargetNodeType == "ct" then
-        nTotalHP = DB.getValue(nodeTarget, HPTOTAL, 0)
-        nTempHP = DB.getValue(nodeTarget, HPTEMP, 0)
-        nWounds = DB.getValue(nodeTarget, WOUNDS, 0)
     elseif sTargetNodeType == "ct" and ActorManager.isRecordType and ActorManager.isRecordType(nodeTarget, "vehicle") then
         if rRoll and type(rRoll) == "table" and (rRoll.sSubtargetPath or "") ~= "" then
             nTotalHP = DB.getValue(DB.getPath(rRoll.sSubtargetPath, "hp"), 0)
@@ -482,6 +519,10 @@ function getTargetHealthData_FGU(sTargetNodeType, nodeTarget, rRoll)
             nTempHP = DB.getValue(nodeTarget, HPTEMP, 0)
             nWounds = DB.getValue(nodeTarget, WOUNDS, 0)
         end
+    elseif sTargetNodeType == "ct" then
+        nTotalHP = DB.getValue(nodeTarget, HPTOTAL, 0)
+        nTempHP = DB.getValue(nodeTarget, HPTEMP, 0)
+        nWounds = DB.getValue(nodeTarget, WOUNDS, 0)
     end
 
     return {
@@ -545,7 +586,7 @@ function getDecomposedTraitName(aTrait)
     }
 end
 
-function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
+function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret, rSource)
     local nAllHP = aData.nTotalHP + aData.nTempHP
     if aData.nWounds + nTotal >= nAllHP
        and (aData.bNoMods or not string.find(sDamage, "%[TYPE:.*radiant.*%]"))
@@ -591,9 +632,12 @@ function processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
         rRoll.sModDC = tostring(aData.nModDC) -- override number, can be nil
         rRoll.sStaticDC = tostring(aData.nStaticDC) -- override number, can be nil
         rRoll.sTrimmedTraitNameForSave = aData.sTrimmedTraitNameForSave
+        if rSource and ActorManager.getCreatureNodeName then
+            rRoll.sOriginalAttacker = ActorManager.getCreatureNodeName(rSource)
+        end
 
         ModifierStack.reset()  -- Modifiers were being applied to the save from the original dmg roll.  Clear it before save.
-        ActionsManager.applyModifiersAndRoll(rTarget, rTarget, false, rRoll)
+        rollSaveSafe(rTarget, rTarget, rRoll)
         return true
     end
     return false
@@ -634,7 +678,7 @@ function applyDamage_v2(rSource, rTarget, p3, p4, p5)
     local aData = hasStrengthOfTheGraveTrait(sTargetNodeType, nodeTarget, rRollHealth)
     local bStrengthOfTheGraveTriggered = false
     if aData and isDamageRoll and hasAvailableStrengthOfTheGrave(aData) then
-        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret)
+        bStrengthOfTheGraveTriggered = processStrengthOfTheGrave(aData, nTotal, sDamage, rTarget, bSecret, rSource)
     end
 
     if not bStrengthOfTheGraveTriggered then

@@ -183,6 +183,14 @@ async function runTests() {
                     msgShort = msgShort
                 })
             end,
+            performAction = function(draginfo, rActor, rRoll)
+                table.insert(ActionsManager.rolls, {
+                    rSource = rActor,
+                    rTarget = rActor,
+                    bMulti = false,
+                    rRoll = rRoll
+                })
+            end,
             applyModifiersAndRoll = function(rSource, rTarget, bMulti, rRoll)
                 table.insert(ActionsManager.rolls, {
                     rSource = rSource,
@@ -903,6 +911,17 @@ async function runTests() {
                 assert(#ActionsManager.save_calls == 0, "Ruleset handler should NOT be called for SotG save (prevent duplicate output)")
                 assert(#ActionsManager.outputs == 1, "Custom SotG output should be emitted")
                 assert(string.find(ActionsManager.outputs[1].msgLong.text, "%[SUCCESS%]"), "Should output SUCCESS")
+            `
+        },
+        {
+            name: "capDamageDescClauses distributes capped damage across multi-type clauses without sum mismatch",
+            code: `
+                local sMulti = "[DAMAGE (M)] Dagger [TYPE: piercing (1d4+3=6)] [TYPE: poison (2d6=7)]"
+                local sCapped = capDamageDescClauses(sMulti, 9)
+                assert(sCapped == "[DAMAGE (M)] Dagger [TYPE: piercing (1d4+3=6)] [TYPE: poison (2d6=3)]", "Expected 6+3=9 distribution, got: " .. tostring(sCapped))
+
+                local sCappedSmall = capDamageDescClauses(sMulti, 4)
+                assert(sCappedSmall == "[DAMAGE (M)] Dagger [TYPE: piercing (1d4+3=4)] [TYPE: poison (2d6=0)]", "Expected 4+0=4 distribution, got: " .. tostring(sCappedSmall))
             `
         }
     ];
